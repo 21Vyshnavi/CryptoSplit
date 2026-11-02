@@ -1,0 +1,56 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: cryptosplit
+      MYSQL_USER: cryptosplit
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --host=127.0.0.1 --user=root --password=\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql+pymysql://cryptosplit:${MYSQL_PASSWORD}@db:3306/cryptosplit?charset=utf8mb4
+      RSA_PRIVATE_KEY_PATH: /run/cryptosplit-keys/rsa_private.pem
+      RSA_PUBLIC_KEY_PATH: /run/cryptosplit-keys/rsa_public.pem
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - ./secrets:/input-secrets:ro
+      - fragment_data:/var/lib/cryptosplit/fragments
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/cryptosplit-keys
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, FOWNER, DAC_OVERRIDE, DAC_READ_SEARCH]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+  minio:
+    image: minio/minio:RELEASE.2025-02-07T23-21-09Z
+    profiles: ["cloud"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
+    volumes: [minio_data:/data]
+    ports: ["127.0.0.1:9001:9001"]
+    restart: unless-stopped
+volumes:
+  mysql_data:
+  fragment_data:
+  minio_data:

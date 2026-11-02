@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.db
+__pycache__/
+.venv/
+.DS_Store
+storage/fragments/**
+!storage/fragments/.gitkeep
